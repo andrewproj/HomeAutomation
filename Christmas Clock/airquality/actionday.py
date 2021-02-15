@@ -1,92 +1,52 @@
-import json, requests, time
+import json, requests, time, io, PIL
 from gpiozero import LED
+from PIL import Image
 from prometheus_client import start_http_server, Gauge
-url = "insert your api url here"
-led22 = LED(22)
-led23 = LED(23)
-led24 = LED(24)
-led27 = LED(27)
+
+url = "https://www.airnowapi.org/aq/observation/zipCode/current/?parameters=PM25&format=application/json&zipCode=80017&distance=25&API_KEY=61E07A6E-679E-4058-8813-D40B0A8B6FEF"
+green_left = LED(22)
+green_right = LED(23)
+red_left = LED(24)
+red_right = LED(27)
 
 if __name__ == '__main__':
     start_http_server(8000)
 
     aqi = Gauge('aqireading', 'AQI Reading', ['polutent'])
+    actionday = Gauge('actionday', 'Action Day')
 
-    
-while True:
-    #put API data into json format/variable
-    data = requests.get(url).json()
+    while True:
+            #try:
+                aqi_json_data = requests.get(url).json()    
+                aq_png_bytes = io.BytesIO(requests.get("https://www.colorado.gov/airquality/psi/adv.png").content)
+                
+                #puts AQI data into prometheus
+                aqi.labels('O3').set(aqi_json_data[0]['AQI']) 
+                aqi.labels('PM25').set(aqi_json_data[1]['AQI'])
+                aqi.labels('PM10').set(aqi_json_data[2]['AQI'])
 
-    #puts AQI data into prometheus
-    aqi.labels('O3').set(data[0]['AQI']) 
-    aqi.labels('PM25').set(data[1]['AQI'])
-    aqi.labels('PM10').set(data[2]['AQI'])
-
-    #write data to seperate files for future use
-    with open("API.json", "w") as f:
-        json.dump(data, f, indent=4)
-
-    with open("O3.json", "w") as f:
-        json.dump(data[0], f, indent=4)
-
-    with open("PM2.5.json", "w") as f:
-        json.dump(data[1], f, indent=4)
-
-    with open("PM10.json", "w") as f:
-        json.dump(data[2], f, indent=4)
-
-    #take specific data from pm2.5
-    AQI = data[1]['AQI']
-
-    #run the lights
-    #Fire is not illegal
-    if AQI in range(0,50):
-        print("The current AQI rating is " + str(AQI) + " (Pretty good)")
-        led22.on()
-        led23.off()
-        led24.off()
-        led27.off()
-
-        time.sleep(300)
-
-    #Fire is slightly illegal
-    elif AQI in range(51,150):
-        print("The current AQI rating is " + str(AQI) + " (Moderate, be careful)")
-        led22.off()
-        led23.off()
-        led24.on()
-        led27.off()
-
-        time.sleep(300)
-
-    #Fire is very illegal
-    elif AQI >= 151:
-        print("The current AQI rating is " + str(AQI) + " (DANGEROUS. DO NOT ROAST THE LOGS [they have feelings])")
-        for i in range(0,300):
-            led22.off()
-            led23.off()
-            led24.on()
-            led27.off()
-
-            time.sleep(.5)
-            
-            led24.off()
-            
-            time.sleep(.5)
-        pass
-
-    #in case is goes wrong
-    else:
-        print("No AQI results, be cautious")
-        for i in range(0,300):
-            led22.on()
-            led23.off()
-            led24.on()
-            led27.off()
-
-            time.sleep(.5)
-
-            led22.off()
-            led24.off()
-            
-            time.sleep(.5)
+                aq_png_img = (PIL.Image.open(aq_png_bytes)).convert('RGB')
+                aq_png_pixel_color = aq_png_img.getpixel((175, 55))
+                
+                if tuple(aq_png_pixel_color) == (0, 167, 215):
+                    print("The current AQI rating is " + str(aqi_json_data[1]['AQI']) + " (Pretty good)")
+                    actionday.set(0)
+                    green_left.on()
+                    green_right.on()
+                    red_left.off()
+                    red_right.off()
+                else:
+                    print("The current AQI rating is " + str(aqi_json_data[1]['AQI']) + " (Bad)")
+                    actionday.set(1)
+                    green_left.off()
+                    green_right.off()
+                    red_left.on()
+                    red_right.on()
+                
+                time.sleep(300)
+                
+            #except:
+            #    print('Error While Processing')
+            #    time.sleep(10)
+                
+        
