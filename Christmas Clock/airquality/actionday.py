@@ -16,7 +16,7 @@ if __name__ == '__main__':
     actionday = Gauge('actionday', 'Action Day')
 
     while True:
-            #try:
+            try:
                 aqi_json_data = requests.get(url).json()    
                 aq_png_bytes = io.BytesIO(requests.get("https://www.colorado.gov/airquality/psi/adv.png").content)
                 
@@ -45,8 +45,8 @@ if __name__ == '__main__':
                 
                 time.sleep(300)
                 
-            #except:
-            #    print('Error While Processing')
-            #    time.sleep(10)
+            except:
+                print('Error While Processing')
+                time.sleep(10)
                 
         
