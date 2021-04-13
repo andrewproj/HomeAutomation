@@ -93,6 +93,9 @@ collections = {
     'vintage pink rose': 1
 }
 excludes = [item.casefold() for item in collections.keys() if collections[item] == 0]
+querymodifier = ""
+for item in excludes:
+    querymodifier += "-\"" + item + "\""
 
 
 def getimagebytes(url):
@@ -101,22 +104,21 @@ def getimagebytes(url):
 
 
 def pushfoundnotification(title, message, resulturl, imageurl):
-    if not excludeitem(title):
-        url = "https://api.pushover.net/1/messages.json"
-        payload = {
-            "token": "***",            
-            "user": "***",  # Notification List
-            "title": title.replace("amp;", ""),
-            "message": message,
-            "url": resulturl,
-            "url_title": "Direct Link"
-        }
-        files = {
-            "attachment": ("product.jpg", getimagebytes(imageurl), "image/jpeg")
-        }
+    url = "https://api.pushover.net/1/messages.json"
+    payload = {
+        "token": "***",
+        "user": "***",  # Notification List
+        "title": title.replace("amp;", ""),
+        "message": message,
+        "url": resulturl,
+        "url_title": "Direct Link"
+    }
+    files = {
+        "attachment": ("product.jpg", getimagebytes(imageurl), "image/jpeg")
+    }
 
-        headers = {'user-agent': 'Mozilla/5.0'}
-        requests.request("POST", url, headers=headers, data=payload, files=files)
+    headers = {'user-agent': 'Mozilla/5.0'}
+    requests.request("POST", url, headers=headers, data=payload, files=files)
 
 
 def excludeitem(producttitle):
@@ -159,7 +161,7 @@ def buildsaksfifthavenueproducturl(pid):
 def buildsaksfifthavenueurl(searchstring, start, size):
     print(str(datetime.now()) + " - Building SaksFifthAvenue URL for searchstring=" + searchstring + ", start=" + str(start) + ", size=" + str(size))
     time.sleep(interrequestdelay)
-    return "https://www.saksfifthavenue.com/on/demandware.store/Sites-SaksFifthAvenue-Site/en_US/Search-UpdateGrid?q=" + searchstring + "&start=" + str(start) + "&sz=" + str(size)
+    return "https://www.saksfifthavenue.com/on/demandware.store/Sites-SaksFifthAvenue-Site/en_US/Search-UpdateGrid?q=" + searchstring + querymodifier + "&start=" + str(start) + "&sz=" + str(size)
 
 
 def saksfifthavenue(searchstring):
@@ -238,7 +240,7 @@ def poshpeanutpushfoundnotification(productlist):
 def buildposhpeanuteurl(searchstring, page):
     print(str(datetime.now()) + " - Building Post Peanut URL for searchstring=" + searchstring + ", page=" + str(page))
     time.sleep(interrequestdelay)
-    return "https://poshpeanut.com/search?page=" + str(page) + "&q=" + searchstring + "&type=product"
+    return "https://poshpeanut.com/search?page=" + str(page) + "&q=" + searchstring + querymodifier + "&type=product"
 
 
 def poshpeanut(searchstring):
@@ -303,7 +305,11 @@ def poshpeanut(searchstring):
 
 start_http_server(8000)
 threading.Thread(target=saksfifthavenue, args=("posh%20peanut",)).start()
-threading.Thread(target=poshpeanut, args=("*",)).start()
+threading.Thread(target=poshpeanut, args=("",)).start()
+
+
+#saksfifthavenue("posh%20peanut")
+#poshpeanut("")
 
 
 while True:
