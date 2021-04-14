@@ -12,6 +12,7 @@ from prometheus_client import start_http_server, Gauge
 
 
 stock = Gauge('stockchecker_stock', 'Stock', ['source', 'type'])
+pushover = Gauge('stockchecker_pushover', 'Pushover', ['header'])
 timestamps = Gauge('stockchecker_timestamp', 'Timestamp', ['source', 'operation'])
 
 
@@ -20,79 +21,96 @@ errorsleepperiod = 5
 interrequestdelay = 5
 testchance = 2  #Use anything over 1 for 100% capture
 
+
 collections = {
-    'amelia earhard': 1,
-    'amethyst': 1,
-    'aqua floral': 1,
-    'ashley': 1,
-    'banana cream': 1,
-    'bella': 1,
-    'black ribbed': 1,
-    'black rose': 1,
-    'blue rose': 0,
-    'bruno': 1,
+    'alpha': -1,
+    'amelia earhard': 0,
+    'amethyst': 0,
+    'aqua floral': 0,
+    'ashley': -1,
+    'banana cream': -1,
+    'bella': 0,
+    'black ribbed': 0,
+    'black rose': -1,
+    'blue rose': -1,
+    'bruno': -1,
     'buddy': 1,
-    'cadet': 0,
-    'cash': 1,
-    'cassie': 1,
-    'chelsea': 1,
-    'chloe': 0,
-    'collyns': 1,
-    'cotton candy': 1,
-    'country rose': 1,
-    'crimson': 0,
-    'crissy': 1,
-    'dusk rose': 1,
-    'dusty rose': 1,
-    'elizabeth': 1,
-    'eloise': 1,
-    'erin': 1,
-    'evil eye': 1,
-    'french gray': 1,
-    'frenchie': 1,
-    'frida kahlo': 1,
-    'fry': 1,
-    'hayley': 1,
-    'hazel': 1,
-    'hydrangea': 0,
-    'jax': 1,
-    'katherine': 0,
-    'keira': 1,
-    'lana': 0,
-    'leia': 1,
-    'lola': 0,
-    'lucia': 1,
-    'malala yousafzai': 1,
-    'mateo': 0,
-    'matryoshka': 1,
-    'miles': 1,
-    'nicholas': 0,
-    'nicolette': 1,
-    'paola': 1,
-    'pink lemonade': 1,
-    'pistachio': 1,
-    'pretzel': 1,
-    'robins egg': 1,
-    'rosa parks': 1,
-    'rosalyn': 0,
-    'rose': 1,
-    'rosie the riveters': 1,
-    'rowan': 1,
-    'ruth bader ginsburg': 1,
-    'sailor blue': 1,
-    'samara': 1,
-    'sashimi': 0,
-    'skip': 1,
-    'strawberry': 0,
-    'sweet pink': 0,
-    'tenni': 0,
-    'theresa': 1,
-    'tommy': 1,
-    'valerie': 0,
-    'vintage dino': 1,
-    'vintage pink rose': 1
+    'cadet': -1,
+    'cash': 0,
+    'cassie': 0,
+    'chelsea': -1,
+    'chloe': -1,
+    'collyns': -1,
+    'copper': -1,
+    'cotton candy': 0,
+    'country rose': 0,
+    'crimson': -1,
+    'crissy': 0,
+    'daniella': -1,
+    'dusk rose': -1,
+    'dusty rose': -1,
+    'elizabeth': 0,
+    'eloise': 0,
+    'erin': 0,
+    'evil eye': 0,
+    'french gray': 0,
+    'frenchie': -1,
+    'frida kahlo': 0,
+    'fry': 0,
+    'hayley': -1,
+    'hazel': 0,
+    'hydrangea': -1,
+    'jax': 0,
+    'katherine': -1,
+    'keira': 0,
+    'lana': -1,
+    'leia': 0,
+    'lizzie': -1,
+    'lola': -1,
+    'leona': -1,
+    'lucia': 0,
+    'lucy': -1,
+    'malala yousafzai': 0,
+    'mateo': -1,
+    'maxine': -1,
+    'maya': -1,
+    'matryoshka': 0,
+    'melina': -1,
+    'miles': 0,
+    'naomi': -1,
+    'nicholas': -1,
+    'nicolette': 0,
+    'olive': 1,
+    'paola': 0,
+    'pink lemonade': 0,
+    'pistachio': -1,
+    'pretzel': -1,
+    'queen of hearts': 1,
+    'robins egg': 0,
+    'rosa parks': 0,
+    'rosalyn': -1,
+    'rose': 0,
+    'rosie the riveters': 0,
+    'rowan': -1,
+    'ruth bader ginsburg': 0,
+    'sailor blue': 0,
+    'samara': 0,
+    'sashimi': -1,
+    'skip': 0,
+    'sophia': 1,
+    'strawberry': -1,
+    'sweet pink': -1,
+    'tenni': -1,
+    'theresa': 0,
+    'tommy': 0,
+    'valerie': -1,
+    'vintage dino': 0,
+    'vintage pink rose': 0
 }
-excludes = [item.casefold() for item in collections.keys() if collections[item] == 0]
+
+
+excludes = [item.casefold() for item in collections.keys() if collections[item] == -1]
+highpriority = [item.casefold() for item in collections.keys() if collections[item] == 1]
 querymodifier = ""
 for item in excludes:
     querymodifier += "-\"" + item + "\""
@@ -104,21 +122,26 @@ def getimagebytes(url):
 
 
 def pushfoundnotification(title, message, resulturl, imageurl):
-    url = "https://api.pushover.net/1/messages.json"
-    payload = {
-        "token": "***",
-        "user": "***",  # Notification List
-        "title": title.replace("amp;", ""),
-        "message": message,
-        "url": resulturl,
-        "url_title": "Direct Link"
-    }
-    files = {
-        "attachment": ("product.jpg", getimagebytes(imageurl), "image/jpeg")
-    }
+    if not excludeitem(title):
+        url = "https://api.pushover.net/1/messages.json"
+        payload = {
+            "token": "***",
+            "user": "***",  # Notification List
+            "priority": itempriority(title),
+            "title": title.replace("amp;", ""),
+            "message": message,
+            "url": resulturl,
+            "url_title": "Direct Link"
+        }
+        files = {
+            "attachment": ("product.jpg", getimagebytes(imageurl), "image/jpeg")
+        }
 
-    headers = {'user-agent': 'Mozilla/5.0'}
-    requests.request("POST", url, headers=headers, data=payload, files=files)
+        headers = {'user-agent': 'Mozilla/5.0'}
+        response = requests.request("POST", url, headers=headers, data=payload, files=files)
+        pushover.labels(header='X-Limit-App-Limit').set(int(response.headers["X-Limit-App-Limit"]))
+        pushover.labels(header='X-Limit-App-Remaining').set(int(response.headers["X-Limit-App-Remaining"]))
+        pushover.labels(header='X-Limit-App-Reset').set(int(response.headers["X-Limit-App-Reset"]))
 
 
 def excludeitem(producttitle):
@@ -130,6 +153,17 @@ def excludeitem(producttitle):
             exclude = True
 
     return exclude
+
+
+def itempriority(producttitle):
+    priority = 1
+    casefoldproducttitle = producttitle.casefold()
+
+    for item in highpriority:
+        if item in casefoldproducttitle:
+            priority = 1
+
+    return priority
 
 
 # region SaksFifthAvenue
@@ -304,12 +338,15 @@ def poshpeanut(searchstring):
 
 
 start_http_server(8000)
+print("Query Modifier:" + querymodifier)
+print("Excludes: " + excludes)
+print("High Priority:" + highpriority)
 threading.Thread(target=saksfifthavenue, args=("posh%20peanut",)).start()
 threading.Thread(target=poshpeanut, args=("",)).start()
 
 
 #saksfifthavenue("posh%20peanut")
-#poshpeanut("")
+##poshpeanut("")
 
 
 while True:
