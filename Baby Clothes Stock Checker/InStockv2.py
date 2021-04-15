@@ -7,19 +7,27 @@ import html
 import bs4
 import time
 import json
+import configparser
 from datetime import datetime
 from prometheus_client import start_http_server, Gauge
+
+
+config = configparser.ConfigParser()
+config.read_file(open('config.cfg'))
+
+
+pushovertoken = config["PUSHOVER"]["token"]
+pushoveruser = config["PUSHOVER"]["user"]
+intercheckperiod = int(config["SETTINGS"]["intercheckperiod"])
+errorsleepperiod = int(config["SETTINGS"]["errorsleepperiod"])
+interrequestdelay = int(config["SETTINGS"]["interrequestdelay"])
+testchance = float(config["SETTINGS"]["testchance"])
+debug = bool(int(config["SETTINGS"]["debug"]))
 
 
 stock = Gauge('stockchecker_stock', 'Stock', ['source', 'type'])
 pushover = Gauge('stockchecker_pushover', 'Pushover', ['header'])
 timestamps = Gauge('stockchecker_timestamp', 'Timestamp', ['source', 'operation'])
-
-
-intercheckperiod = 60
-errorsleepperiod = 5
-interrequestdelay = 5
-testchance = 2  #Use anything over 1 for 100% capture
 
 
 collections = {
@@ -125,8 +133,8 @@ def pushfoundnotification(title, message, resulturl, imageurl):
     if not excludeitem(title):
         url = "https://api.pushover.net/1/messages.json"
         payload = {
-            "token": "***",
-            "user": "***",  # Notification List
+            "token": pushovertoken,
+            "user": pushoveruser,
             "priority": itempriority(title),
             "title": title.replace("amp;", ""),
             "message": message,
@@ -156,7 +164,7 @@ def excludeitem(producttitle):
 
 
 def itempriority(producttitle):
-    priority = 1
+    priority = 0
     casefoldproducttitle = producttitle.casefold()
 
     for item in highpriority:
@@ -193,9 +201,10 @@ def buildsaksfifthavenueproducturl(pid):
 
 
 def buildsaksfifthavenueurl(searchstring, start, size):
+    # Saks search does not support extra long exclusions; removing for now
     print(str(datetime.now()) + " - Building SaksFifthAvenue URL for searchstring=" + searchstring + ", start=" + str(start) + ", size=" + str(size))
     time.sleep(interrequestdelay)
-    return "https://www.saksfifthavenue.com/on/demandware.store/Sites-SaksFifthAvenue-Site/en_US/Search-UpdateGrid?q=" + searchstring + querymodifier + "&start=" + str(start) + "&sz=" + str(size)
+    return "https://www.saksfifthavenue.com/on/demandware.store/Sites-SaksFifthAvenue-Site/en_US/Search-UpdateGrid?q=" + searchstring + "&start=" + str(start) + "&sz=" + str(size)
 
 
 def saksfifthavenue(searchstring):
@@ -222,7 +231,7 @@ def saksfifthavenue(searchstring):
                 response = requests.request("GET", url, headers=headers, data=payload)
                 matches = re.findall(regexstring, response.text)
                 for currentmatch in matches:
-                    if random.random() <= testchance:
+                    if not debug or random.random() <= testchance:
                         pid = currentmatch[0]
                         productcatalog[pid] = currentmatch
                         currentinstockpidslist.append(pid)
@@ -301,7 +310,7 @@ def poshpeanut(searchstring):
                 response = requests.request("GET", url, headers=headers, data=payload)
                 matches = re.findall(regexstring, response.text)
                 for currentmatch in matches:
-                    if random.random() <= testchance:
+                    if not debug or random.random() <= testchance:
                         currentproduct = json.loads(currentmatch)["product"]
                         pid = currentproduct["id"]
                         productcatalog[pid] = currentproduct
@@ -338,17 +347,18 @@ def poshpeanut(searchstring):
 
 
 start_http_server(8000)
-print("Query Modifier:" + querymodifier)
-print("Excludes: " + excludes)
-print("High Priority:" + highpriority)
-threading.Thread(target=saksfifthavenue, args=("posh%20peanut",)).start()
-threading.Thread(target=poshpeanut, args=("",)).start()
+print("Query Modifier:" + str(querymodifier))
+print("Excludes: " + str(excludes))
+print("High Priority:" + str(highpriority))
+
+if debug:
+    saksfifthavenue("posh%20peanut")
+    poshpeanut("")
+else:
+    threading.Thread(target=saksfifthavenue, args=("posh%20peanut",)).start()
+    threading.Thread(target=poshpeanut, args=("",)).start()
+    while True:
+        time.sleep(1)
 
 
-#saksfifthavenue("posh%20peanut")
-##poshpeanut("")
-
-
-while True:
-    time.sleep(1)
 
