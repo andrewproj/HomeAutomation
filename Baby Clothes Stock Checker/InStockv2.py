@@ -23,7 +23,9 @@ errorsleepperiod = int(config["SETTINGS"]["errorsleepperiod"])
 interrequestdelay = int(config["SETTINGS"]["interrequestdelay"])
 testchance = float(config["SETTINGS"]["testchance"])
 debug = bool(int(config["SETTINGS"]["debug"]))
-
+requesttimeout = float(config["SETTINGS"]["requesttimeout"])
+minimumnotseendurationfornotification = float(config["SETTINGS"]["minimumnotseendurationfornotification"])
+sendnotifications = bool(int(config["SETTINGS"]["sendnotifications"]))
 
 stock = Gauge('stockchecker_stock', 'Stock', ['source', 'type'])
 pushover = Gauge('stockchecker_pushover', 'Pushover', ['header'])
@@ -125,12 +127,12 @@ for item in excludes:
 
 
 def getimagebytes(url):
-    image = requests.request("GET", url).content
+    image = requests.request("GET", url, timeout=requesttimeout).content
     return image
 
 
-def pushfoundnotification(title, message, resulturl, imageurl):
-    if not excludeitem(title):
+def pushfoundnotification(title, message, resulturl, imageurl, timesincelastseen):
+    if not excludeitem(title) and timesincelastseen >= minimumnotseendurationfornotification:
         url = "https://api.pushover.net/1/messages.json"
         payload = {
             "token": pushovertoken,
@@ -144,12 +146,13 @@ def pushfoundnotification(title, message, resulturl, imageurl):
         files = {
             "attachment": ("product.jpg", getimagebytes(imageurl), "image/jpeg")
         }
-
         headers = {'user-agent': 'Mozilla/5.0'}
-        response = requests.request("POST", url, headers=headers, data=payload, files=files)
-        pushover.labels(header='X-Limit-App-Limit').set(int(response.headers["X-Limit-App-Limit"]))
-        pushover.labels(header='X-Limit-App-Remaining').set(int(response.headers["X-Limit-App-Remaining"]))
-        pushover.labels(header='X-Limit-App-Reset').set(int(response.headers["X-Limit-App-Reset"]))
+
+        if sendnotifications:
+            response = requests.request("POST", url, headers=headers, data=payload, files=files, timeout=requesttimeout)
+            pushover.labels(header='X-Limit-App-Limit').set(int(response.headers["X-Limit-App-Limit"]))
+            pushover.labels(header='X-Limit-App-Remaining').set(int(response.headers["X-Limit-App-Remaining"]))
+            pushover.labels(header='X-Limit-App-Reset').set(int(response.headers["X-Limit-App-Reset"]))
 
 
 def excludeitem(producttitle):
@@ -185,11 +188,14 @@ def saksfifthavenuepushfoundnotification(productlist):
         atmcode = currentproduct[3]
         brandname = currentproduct[4]
         productname = currentproduct[5]
+        priortimeseen = currentproduct[6]
+        currenttimeseen = currentproduct[7]
+        timesincelastseen = currenttimeseen - priortimeseen
         title = productname + " $" + price
         imageurl = buildsaksfifthavenueimageurl(pid)
         producturl = buildsaksfifthavenueproducturl(pid)
 
-        pushfoundnotification(title=title, message="SaksFifthAvenue In Stock Alert", resulturl=producturl, imageurl=imageurl)
+        pushfoundnotification(title=title, message="SaksFifthAvenue In Stock Alert", resulturl=producturl, imageurl=imageurl, timesincelastseen=timesincelastseen)
 
 
 def buildsaksfifthavenueimageurl(pid):
@@ -228,12 +234,15 @@ def saksfifthavenue(searchstring):
 
             while len(matches) > 0 or start == 0:
                 url = buildsaksfifthavenueurl(searchstring, start, size)
-                response = requests.request("GET", url, headers=headers, data=payload)
+                response = requests.request("GET", url, headers=headers, data=payload, timeout=requesttimeout)
                 matches = re.findall(regexstring, response.text)
                 for currentmatch in matches:
                     if not debug or random.random() <= testchance:
                         pid = currentmatch[0]
-                        productcatalog[pid] = currentmatch
+                        priortimeseen = 0
+                        if pid in productcatalog:
+                            priortimeseen = productcatalog[pid][7]
+                        productcatalog[pid] = currentmatch + (priortimeseen, time.time())
                         currentinstockpidslist.append(pid)
 
                 start = start + size
@@ -276,8 +285,11 @@ def poshpeanutpushfoundnotification(productlist):
         title = currentproduct["title"] + " $" + str(int(price))
         imageurl = "https:" + currentproduct["featured_image"]
         resulturl = "https://poshpeanut.com/products/" + currentproduct["handle"] + "/"
+        priortimeseen = currentproduct["priortimeseen"]
+        currenttimeseen = currentproduct["currenttimeseen"]
+        timesincelastseen = currenttimeseen - priortimeseen
 
-        pushfoundnotification(title=title, message="Posh Peanut In Stock Alert", resulturl=resulturl, imageurl=imageurl)
+        pushfoundnotification(title=title, message="Posh Peanut In Stock Alert", resulturl=resulturl, imageurl=imageurl, timesincelastseen=timesincelastseen)
 
 
 def buildposhpeanuteurl(searchstring, page):
@@ -307,14 +319,20 @@ def poshpeanut(searchstring):
 
             while len(matches) > 0 or page == 1:
                 url = buildposhpeanuteurl(searchstring, page)
-                response = requests.request("GET", url, headers=headers, data=payload)
+                response = requests.request("GET", url, headers=headers, data=payload, timeout=requesttimeout)
                 matches = re.findall(regexstring, response.text)
                 for currentmatch in matches:
                     if not debug or random.random() <= testchance:
                         currentproduct = json.loads(currentmatch)["product"]
-                        pid = currentproduct["id"]
-                        productcatalog[pid] = currentproduct
-                        currentinstockpidslist.append(pid)
+                        if (currentproduct["available"] is True) and not(currentproduct["type"] == "preorder"):
+                            pid = currentproduct["id"]
+                            priortimeseen = 0
+                            if pid in productcatalog:
+                                priortimeseen = productcatalog[pid]["currenttimeseen"]
+                            currentproduct["priortimeseen"] = priortimeseen
+                            currentproduct["currenttimeseen"] = time.time()
+                            productcatalog[pid] = currentproduct
+                            currentinstockpidslist.append(pid)
 
                 page = page + 1
 
