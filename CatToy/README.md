@@ -1,4 +1,6 @@
-GPIO Zero APIs Used
+#API Refernce
+
+##GPIO Zero APIs Used
 
 MotionSensor
 https://gpiozero.readthedocs.io/en/stable/api_input.html#motionsensor-d-sun-pir
@@ -9,12 +11,12 @@ https://gpiozero.readthedocs.io/en/stable/api_output.html#led
 SERVO
 https://gpiozero.readthedocs.io/en/stable/api_output.html#servo
 
-pigpio
+##pigpio
 https://abyz.me.uk/rpi/pigpio/index.html
 - Access to Hardware PWM for Servo Control
 - Remote connectivity to GPIO  for easier development
 
-Purchased Components:
+#Purchased Components:
 
 PIR Motion Sensor Module
 https://www.microcenter.com/product/618776/inland-pir-motion-sensor-module
