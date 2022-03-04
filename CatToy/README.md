@@ -1,5 +1,9 @@
 # API Refernce
 
+## PI Zero
+
+![PI Zero](https://raw.githubusercontent.com/andrewproj/HomeAutomation/main/CatToy/R-Pi-Zero-Pinout.jpg)
+
 ## GPIO Zero APIs Used
 
 * MotionSensor
