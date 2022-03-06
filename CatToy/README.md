@@ -2,7 +2,7 @@
 
 ## PI Zero
 
-![PI Zero](Board Breakout.jpg)
+![PI Zero](Board_Breakout.jpg)
 
 ## GPIO Zero APIs Used
 
